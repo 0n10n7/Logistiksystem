@@ -1,3 +1,4 @@
+import { stringify } from "querystring";
 import { PollingWatchKind, textChangeRangeIsUnchanged } from "typescript";
 
 const OrderStates = Object.freeze({
@@ -64,6 +65,33 @@ class Product {
         this.warehouseIndex = warehouseIndex;
     }
 }
+const file = Bun.file("src/boardgames_ranks.csv");
+
+let input = await file.text();
+let boardgames  = [];
+let boardgamesRaw = input.split("\n");
+for(let i = 0; i< boardgamesRaw.length; i ++){
+    let rowArray = boardgamesRaw[i].split(",");
+    let boardgame = {
+        id: rowArray[0],
+        name: rowArray[1],
+        yearpublished: rowArray[2],
+        rank : rowArray[3],
+        bayesaverage: rowArray[4],
+        average: rowArray[5],
+        userrated: rowArray[6],
+        abstracts_rank: rowArray[7],
+        cgs_rank: rowArray[8],
+        childrensgames_rank: rowArray[9],
+        familygames_rank: rowArray[10],
+        partygames_rank: rowArray[11],
+        strategygames_rank: rowArray[12],
+        thematic_rank: rowArray[13],
+        wargames_rank: rowArray[14],
+    };
+    boardgames.push(boardgame);
+}
+
 let warehouses = [];
 let products = [];
 function CreateWarehouse(name) {
@@ -75,14 +103,34 @@ function CreateWarehouse(name) {
     warehouses.push(warehouse);
 }
 function GenerateData(){
-    products.push(new Product("Brass: Birmingham", 1000, "800 Kr"));
-    products.push(new Product("Brass: Lancashire", 900, "750 Kr"));
-    products.push(new Product("Brass: Stoke-on-Trent", 999, "799 Kr"));
-    products.push(new Product("Brass: Sevenoaks", 700, "1200 Kr"));
-    products.push(new Product("Brass: Tonnebridge", 100, "300 Kr"));
-    products.push(new Product("Brass: Exiter", 1-0, "50 Kr"));
-    products.push(new Product("Brass: London", 1000, "700 Kr"));
-    CreateWarehouse("Bismark");
+    let shelfYCounter = 0;
+    let warehouseIndexCounter = 0;
+    CreateWarehouse(`Location ${warehouseIndexCounter}`);
+    for(let i = 0; i < boardgames.length; i++){
+        if(i%60 === 0){
+            shelfYCounter++;
+        }
+        if(shelfYCounter%120 === 0 && i%60 === 0){
+            warehouseIndexCounter++;
+            CreateWarehouse(`Location ${warehouseIndexCounter}`);
+        }
+        let product = new Product(boardgames[i].name,Math.floor(Math.random()* 1000 + 250),Math.floor(Math.random()* 5010 + 450),i%60,shelfYCounter%120,warehouseIndexCounter);
+        warehouses[warehouseIndexCounter].productsInStock.push(product);
+        products.push(product);
+    }
+    // products.push(new Product("Brass: Birmingham", 1000, "800 Kr"));
+    // products.push(new Product("Brass: Lancashire", 900, "750 Kr"));
+    // products.push(new Product("Brass: Stoke-on-Trent", 999, "799 Kr"));
+    // products.push(new Product("Brass: Sevenoaks", 700, "1200 Kr"));
+    // products.push(new Product("Brass: Tonnebridge", 100, "300 Kr"));
+    // products.push(new Product("Brass: Exiter", 1-0, "50 Kr"));
+    // products.push(new Product("Brass: London", 1000, "700 Kr"));
+    // CreateWarehouse("Bismark");
+    for(let i = 0; i < warehouses.length; i++){
+        console.log(warehouses[i]);
+    }
+    //console.log(warehouses);
+    Bun.write("src/data.json",JSON.stringify(warehouses));
 }
 
 GenerateData();
