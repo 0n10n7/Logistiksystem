@@ -1,5 +1,13 @@
+import { read } from "fs";
 import { stringify } from "querystring";
 import { PollingWatchKind, textChangeRangeIsUnchanged } from "typescript";
+import { Elysia } from "elysia";
+//import mongoose,{ Mongoose} from "mongoose";
+
+const uri = "mongodb+srv://0n10n7:<password>@cluster0.bumepuf.mongodb.net/?retryWrites=true&w=majority";
+//Mongoose.connect(uri);
+
+const server = new Elysia();
 
 const OrderStates = Object.freeze({
 	Ordered: Symbol("Ordered"),
@@ -20,7 +28,7 @@ class Order {
     constructor(productType) {
       this.productType = productType;
       this.picker ;
-      this.status = 0;
+      this.status = OrderStates.Ordered;
     }
     FindPicker() {
         this.productType.shelfX
@@ -50,9 +58,20 @@ class Order {
     }
 }
 class Worker {
-    constructor(job){
+    constructor(job,name){
         this.jobTitle = job;
         this.orderList = []; 
+        this.schedule = [];
+        this.name = name;
+    }
+    //Should add foolproofing, making sure that there isnt overlap in the schedule
+    CreateSchedule(repeat,shiftStart,shiftEnd){
+        let scheduleElement = {
+            shiftStart : shiftStart%604800000,
+            shiftEnd : shiftEnd%604800000,
+            repeat: repeat,
+        }
+        this.schedule.push(scheduleElement);
     }
 }
 class Product {
@@ -66,6 +85,9 @@ class Product {
     }
 }
 const file = Bun.file("src/boardgames_ranks.csv");
+const namntab11File = Bun.file("src/be0001namntab11-2022.csv");
+const namntab12File = Bun.file("src/be0001namntab12-2022.csv");
+
 
 let input = await file.text();
 let boardgames  = [];
@@ -102,9 +124,17 @@ function CreateWarehouse(name) {
     };
     warehouses.push(warehouse);
 }
+
+input = await namntab11File.text();
+let namntab11 = input.split("\n");
+input = await namntab12File.text();
+let namntab12 = input.split("\n");
+
 function GenerateData(){
     let shelfYCounter = 0;
     let warehouseIndexCounter = 0;
+    let workerAmount = 60;
+    let workerSplit = 2; // 1/workersplit = fraction of working pop that is named after the female names list
     CreateWarehouse(`Location ${warehouseIndexCounter}`);
     for(let i = 0; i < boardgames.length; i++){
         if(i%60 === 0){
@@ -118,6 +148,33 @@ function GenerateData(){
         warehouses[warehouseIndexCounter].productsInStock.push(product);
         products.push(product);
     }
+    workerAmount *= warehouseIndexCounter;
+    for (let i = 0; i < workerAmount; i++) {
+        let readName = "";
+        if(i % workerSplit === 0){
+            readName = namntab11[Math.floor(Math.random()* namntab11.length)];
+            readName = readName.split(",")[0];
+            readName = readName.replaceAll(`"`,"");
+        }
+        else{
+            readName = namntab12[Math.floor(Math.random()* namntab12.length)];
+            readName = readName.split(",")[0];
+            readName = readName.replaceAll(`"`,"");
+        }
+        let worker;
+        if(i%5 === Math.floor(Math.random()* 5)){
+            worker = new Worker(JobTitle.Driver,readName)
+        }
+        else{
+            worker = new Worker(JobTitle.Picker,readName)
+        }
+        let randomTime = Math.floor(Math.random()* 86400000 * 7);
+        for(let j = 1; j <= 7; j++){
+            let shiftLength = Math.floor(Math.random()* 86400000 / Math.floor(Math.random()* 6)+6);
+            worker.CreateSchedule(true,new Date(Date.now() + randomTime * j),new Date(Date.now() + (randomTime * j)+shiftLength))
+        }
+        warehouses[i%warehouseIndexCounter+1].workers.push(worker);
+    }
     // products.push(new Product("Brass: Birmingham", 1000, "800 Kr"));
     // products.push(new Product("Brass: Lancashire", 900, "750 Kr"));
     // products.push(new Product("Brass: Stoke-on-Trent", 999, "799 Kr"));
@@ -126,11 +183,36 @@ function GenerateData(){
     // products.push(new Product("Brass: Exiter", 1-0, "50 Kr"));
     // products.push(new Product("Brass: London", 1000, "700 Kr"));
     // CreateWarehouse("Bismark");
-    for(let i = 0; i < warehouses.length; i++){
-        console.log(warehouses[i]);
-    }
+    // for(let i = 0; i < warehouses.length; i++){
+    //     console.log(warehouses[i]);
+    // }
     //console.log(warehouses);
     Bun.write("src/data.json",JSON.stringify(warehouses));
 }
 
+function Working(time,warehouseIndex){
+    console.log("These people are working")
+    let workersWorking = [];
+    let warehouse = warehouses[warehouseIndex];
+    for (let i = 0; i < warehouse.workers.length; i++) {
+        
+        let worker = warehouse.workers[i];
+        let working = false;
+        for (let i = 0; i < worker.schedule.length; i++) {
+            let scheduleElement = worker.schedule[i];
+            if(Number(scheduleElement.shiftStart) > time%604800000 && Number(scheduleElement.shiftEnd< time%604800000)){
+                working = true;
+            }
+        }
+        if(working){
+            workersWorking.push(worker);
+        }
+    }
+    console.log(workersWorking);
+    return workersWorking;
+}
+
 GenerateData();
+for(let i = 0; i < warehouses.length; i ++){
+    Working(Date.now(),i);
+}
