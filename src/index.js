@@ -186,18 +186,6 @@ function GenerateData(){
         }
         warehouses[i%warehouseIndexCounter+1].workers.push(worker);
     }
-    // products.push(new Product("Brass: Birmingham", 1000, "800 Kr"));
-    // products.push(new Product("Brass: Lancashire", 900, "750 Kr"));
-    // products.push(new Product("Brass: Stoke-on-Trent", 999, "799 Kr"));
-    // products.push(new Product("Brass: Sevenoaks", 700, "1200 Kr"));
-    // products.push(new Product("Brass: Tonnebridge", 100, "300 Kr"));
-    // products.push(new Product("Brass: Exiter", 1-0, "50 Kr"));
-    // products.push(new Product("Brass: London", 1000, "700 Kr"));
-    // CreateWarehouse("Bismark");
-    // for(let i = 0; i < warehouses.length; i++){
-    //     console.log(warehouses[i]);
-    // }
-    //console.log(warehouses);
     Bun.write("src/data.json",JSON.stringify(warehouses));
 }
 
@@ -222,12 +210,17 @@ function Working(time,warehouseIndex){
     console.log(workersWorking);
     return workersWorking;
 }
-
-GenerateData();
-for(let i = 0; i < warehouses.length; i ++){
-    Working(Date.now(),i);
+function ProductsInStock(){
+    let productsInStockCurrently = [];
+    for (let i = 0; i < products.length; i++) {
+        let product = products[i];
+        if(product.inStock > 0){
+            productsInStockCurrently.push(product);
+        }
+    }
+    return productsInStockCurrently;
 }
-
+GenerateData();
 
 //Endpoints
 
@@ -270,12 +263,27 @@ server.get("/Working/:warehouseIndex/:day", async ({ params }) => {
     }
 
     return workersWorkingDay;
-})
+});
 //Wokrers working att a given warehouse
 server.get("Working/:warehouseIndex", async ({ params }) => {
+    console.log("Working in ", params.warehouseIndex, "called")
     return warehouses[params.warehouseIndex].workers;
-})
+});
 //Working currently at a given warehouse
 server.get("/Working/now/:warehouseIndex", async ({ params }) => {
+    console.log("Working now in " , params.warehouseIndex, "called");
     return Working(Date.now(),params.warehouseIndex)
-})
+});
+server.get("/Productsinstock/All" , async()=> {
+    console.log("prodcuts in stock called");
+    return ProductsInStock();
+});
+server.get("/Productsinstock/:productName", async({ params })=> {
+    for (let i = 0; i < products.length; i++) {
+        let product = products[i];
+        if(product.name == params.productName){
+            return product;
+        }
+    }
+    return "Product doesnt exsist";
+});
