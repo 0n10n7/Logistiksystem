@@ -2,12 +2,14 @@ import { read } from "fs";
 import { stringify } from "querystring";
 import { PollingWatchKind, textChangeRangeIsUnchanged } from "typescript";
 import { Elysia } from "elysia";
+
 //import mongoose,{ Mongoose} from "mongoose";
 
 const uri = "mongodb+srv://0n10n7:<password>@cluster0.bumepuf.mongodb.net/?retryWrites=true&w=majority";
 //Mongoose.connect(uri);
 
 const server = new Elysia();
+server.listen(8080);
 
 const OrderStates = Object.freeze({
 	Ordered: Symbol("Ordered"),
@@ -34,27 +36,34 @@ class Order {
         this.productType.shelfX
         this.productType.warehouseIndex
         let picker = new Worker(picker);
-        for(let i =0 ; i < warehouses[this.productType.warehouseIndex].workers.length; i++){
-            let worker = warehouses[this.productType.warehouseIndex].workers[i];
+        let manhatanDistance = -9;
+        let workersOnShitf = Working(Date.now(),this.productType.warehouseIndex)
+        for(let i =0 ; i < workersOnShitf.length; i++){
+            let worker = workersOnShitf[i];
             if(worker.orderList.length != 0){
                 let lastOrder = worker.orderList[worker.orderList.length-1];
-            }
-            else{
                 
-            }
-            
-            let manhatanDistance = -9;
                 tempDistance = (abs(this.productType.shelfX-lastOrder.productType.shelfX) + abs(this.productType.shelfY-lastOrder.productType.shelfY));                
                 if(tempDistance < manhatanDistance || manhatanDistance === -9)
                 {
                     manhatanDistance = tempDistance;
+                    picker = worker;
                 }
-            
+            }
+            else{
+                picker = worker;
+                break;
+            }
         }
         //calculate distance from a picker to shelf number using manhattan distance.
         //One of the distances needs to be multiplied with 5, either x or y depending on shelf oriantation
         //Distance is calculated from youngest active order asigned to a picker
 
+    }
+}
+class Purchase{
+    constructor(){
+        this.OrderDate = Date.now();
     }
 }
 class Worker {
@@ -67,21 +76,23 @@ class Worker {
     //Should add foolproofing, making sure that there isnt overlap in the schedule
     CreateSchedule(repeat,shiftStart,shiftEnd){
         let scheduleElement = {
-            shiftStart : shiftStart%604800000,
-            shiftEnd : shiftEnd%604800000,
+            shiftStart : new Date(shiftStart%604800000),
+            shiftEnd : new Date (shiftEnd%604800000),
             repeat: repeat,
         }
         this.schedule.push(scheduleElement);
     }
 }
 class Product {
-    constructor(name,weight,price,shelfX,shelfY,warehouseIndex){
+    constructor(name,weight,price,shelfX,shelfY,warehouseIndex,inStock){
         this.name = name;
         this.weight = weight;
         this.price = price;
         this.shelfX = shelfX;
         this.shelfY = shelfY;
-        this.warehouseIndex = warehouseIndex;
+        this.warehouseIndex = [];
+        this.warehouseIndex[0] = warehouseIndex;
+        this.inStock = inStock;
     }
 }
 const file = Bun.file("src/boardgames_ranks.csv");
@@ -144,7 +155,7 @@ function GenerateData(){
             warehouseIndexCounter++;
             CreateWarehouse(`Location ${warehouseIndexCounter}`);
         }
-        let product = new Product(boardgames[i].name,Math.floor(Math.random()* 1000 + 250),Math.floor(Math.random()* 5010 + 450),i%60,shelfYCounter%120,warehouseIndexCounter);
+        let product = new Product(boardgames[i].name,Math.floor(Math.random()* 1000 + 250),Math.floor(Math.random()* 5010 + 450),i%60,shelfYCounter%120,warehouseIndexCounter,Math.floor(Math.random()*50 + 12));
         warehouses[warehouseIndexCounter].productsInStock.push(product);
         products.push(product);
     }
@@ -216,3 +227,55 @@ GenerateData();
 for(let i = 0; i < warehouses.length; i ++){
     Working(Date.now(),i);
 }
+
+
+//Endpoints
+
+server.get("/Working/:warehouseIndex/:day", async ({ params }) => {
+    console.log("Working today");
+    let arr = warehouses[params.warehouseIndex].workers;
+    let workersWorkingDay = [];
+    const days = [
+        "sunday",
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday"
+    ];
+
+    if (!days.includes(params.day)) {
+        return `'${params.day}' is not a valid day`
+    }
+
+    //arr = arr.filter(e => e.schedule[days.indexOf(params.day)]);
+    for (let i = 0; i < arr.length; i++) {
+        let worker = arr[i];
+        //console.log(worker);
+        for(let j= 0; j < worker.schedule.length; j++){
+            try {
+                if(days[worker.schedule[j].shiftStart.getDay()] == params.day || days[worker.schedule[j].shiftEnd.getDay()] == params.day){
+                    workersWorkingDay.push(worker);
+                    break;
+                }
+            } catch (error) {
+                //Janky solution to a problem in the data generation
+                console.log("this one is one of the incorectly generated ones");
+            }
+        }
+    }
+    if (workersWorkingDay.length === 0) {
+        return `No employees working on ${params.day}s`;
+    }
+
+    return workersWorkingDay;
+})
+//Wokrers working att a given warehouse
+server.get("Working/:warehouseIndex", async ({ params }) => {
+    return warehouses[params.warehouseIndex].workers;
+})
+//Working currently at a given warehouse
+server.get("/Working/now/:warehouseIndex", async ({ params }) => {
+    return Working(Date.now(),params.warehouseIndex)
+})
