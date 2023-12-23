@@ -27,15 +27,17 @@ class Order {
     //productType should be Product
     //wareHouseIndex should be an integer
     //picker should be a Worker
-    constructor(productType) {
+    constructor(productType,orderDate) {
       this.productType = productType;
       this.picker ;
       this.status = OrderStates.Ordered;
+      this.orderDate = orderDate;
     }
     FindPicker() {
+        this.status=OrderStates.Asigned;
         this.productType.shelfX
         this.productType.warehouseIndex
-        let picker = new Worker(picker);
+        let picker;
         let manhatanDistance = -9;
         let workersOnShitf = Working(Date.now(),this.productType.warehouseIndex)
         for(let i =0 ; i < workersOnShitf.length; i++){
@@ -63,7 +65,14 @@ class Order {
 }
 class Purchase{
     constructor(){
-        this.OrderDate = Date.now();
+        this.orderDate = Date.now();
+        this.completionDate;
+        this.orders=[];
+        this.price=0;
+    }
+    AddOrder(order){
+        this.orders.push(order);
+        this.price+=order.productType.price;
     }
 }
 class Worker {
@@ -124,7 +133,25 @@ for(let i = 0; i< boardgamesRaw.length; i ++){
     };
     boardgames.push(boardgame);
 }
-
+function GeneratePurchase(){
+    let generatedPurchase = new Purchase();
+    let randomYear = Math.round(Math.random()*2 + 2021);
+    let randomMonth = Math.round(Math.random()*12);
+    let randomDate = Math.round(Math.random()*30 + 1);//Overflow is fine it just carries over to the next month
+    let randomHour = Math.round(Math.random()*24);
+    let randomMinuteAndSecond = Math.round(Math.random()*60);
+    for(let i = 0; i < Math.floor(Math.random()* 12 + 2); i ++){
+        let randomProductType = products[Math.floor(Math.random() * products.length)];
+        let generatedOrder = new Order(randomProductType,new Date(randomYear,randomMonth,randomDate,randomHour,randomMinuteAndSecond,randomMinuteAndSecond));
+        generatedOrder.FindPicker();
+        generatedPurchase.AddOrder(generatedOrder); 
+    }
+    //this will create some orders that where placed in the future (Untill after 31st of december 2023)
+    
+    generatedPurchase.orderDate = new Date(randomYear,randomMonth,randomDate,randomHour,randomMinuteAndSecond,randomMinuteAndSecond);
+    purchases.push(generatedPurchase);
+}
+let purchases = [];
 let warehouses = [];
 let products = [];
 function CreateWarehouse(name) {
@@ -186,11 +213,15 @@ function GenerateData(){
         }
         warehouses[i%warehouseIndexCounter+1].workers.push(worker);
     }
+    for (let i = 0; i < 2000; i++) {
+        GeneratePurchase();
+    }
     Bun.write("src/data.json",JSON.stringify(warehouses));
+    Bun.write("src/orders.json",JSON.stringify(purchases));
+    console.log("Generated Data");
 }
 
 function Working(time,warehouseIndex){
-    console.log("These people are working")
     let workersWorking = [];
     let warehouse = warehouses[warehouseIndex];
     for (let i = 0; i < warehouse.workers.length; i++) {
@@ -207,7 +238,6 @@ function Working(time,warehouseIndex){
             workersWorking.push(worker);
         }
     }
-    console.log(workersWorking);
     return workersWorking;
 }
 function ProductsInStock(){
@@ -219,6 +249,16 @@ function ProductsInStock(){
         }
     }
     return productsInStockCurrently;
+}
+function CompletedPurchases(){
+    let completedPurchases = [];
+    for (let i = 0; i < purchases.length; i++) {
+        let purchase = purchases[i];
+        if(typeof(purchase.completionDate) == Date){
+            completedPurchases.push(purchase);
+        }
+    }
+    return completedPurchases;
 }
 GenerateData();
 
@@ -245,7 +285,6 @@ server.get("/Working/:warehouseIndex/:day", async ({ params }) => {
     //arr = arr.filter(e => e.schedule[days.indexOf(params.day)]);
     for (let i = 0; i < arr.length; i++) {
         let worker = arr[i];
-        //console.log(worker);
         for(let j= 0; j < worker.schedule.length; j++){
             try {
                 if(days[worker.schedule[j].shiftStart.getDay()] == params.day || days[worker.schedule[j].shiftEnd.getDay()] == params.day){
@@ -286,4 +325,97 @@ server.get("/Productsinstock/:productName", async({ params })=> {
         }
     }
     return "Product doesnt exsist";
+});
+server.get("/pickers/without/:param", async({params}) => {
+    let withoutOrder =[];
+    for (let i = 0; i < warehouses.length; i++) {
+        const warehouse = warehouses[i];
+        for (let j = 0; j < warehouse.workers.length; j++) {
+            const worker = warehouse.workers[j];
+            if(worker.orderList.length == 0 && worker.jobTitle === JobTitle.Picker){
+                withoutOrder.push(worker);
+            }
+        }
+    }
+    return withoutOrder;
+});
+server.get("/Orderstobe/picked", async({params}) => {
+    let toBePicked =[];
+    for (let i = 0; i < purchases.length; i++) {
+        const purchase = purchases[i];
+        for (let j = 0; j < purchase.orders.length; j++) {
+            const order = purchase.orders[j];
+            if(order.status === OrderStates.Asigned){
+                toBePicked.push(order);
+            }
+        }
+    }
+    return toBePicked;
+});
+server.get("/Orderstobe/driven/:oldestOrAll", async({params}) => {
+    let toBeDriven =[];
+    let oldest;
+    let oldestOrder;
+    for (let i = 0; i < purchases.length; i++) {
+        const purchase = purchases[i];
+        for (let j = 0; j < purchase.orders.length; j++) {
+            const order = purchase.orders[j];
+            if(order.status === OrderStates.PickedUp){
+                toBeDriven.push(order);
+                if(order.orderDate < oldest || typeof(oldest) == undefined){
+                    oldest = order.orderDate;
+                    oldestOrder=order;
+                }
+            }
+        }
+    }
+    if(params.oldestOrAll == "oldest"){
+        console.log(oldestOrder);
+        return oldestOrder;
+    }
+    return toBeDriven;
+});
+server.get("/orders/:month/:totalOrSingle", async({params}) => {
+    const months = [
+        "january",
+        "febuary",
+        "march",
+        "april",
+        "may",
+        "june",
+        "july",
+        "august",
+        "september",
+        "october",
+        "november",
+        "december"
+    ];
+
+    if (!months.includes(params.month)) {
+        return `'${params.month}' is not a valid month`
+    }
+    let completedPurchases = CompletedPurchases();
+    if(params.totalOrSingle == "total"){
+        let totalPrice = 0;
+        for (let i = 0; i < completedPurchases.length; i++) {
+            let purchase = completedPurchases[i];
+            totalPrice += purchase.price;
+        }
+        return totalPrice;
+    }
+    else if(params.totalOrSingle == "priciest"){
+        let priciest = 0;
+        let priciestPurchase;
+        for (let i = 0; i < completedPurchases.length; i++) {
+            let purchase = completedPurchases[i];
+            if(purchase.price > priciest){
+                priciest = purchase.price;
+                priciestPurchase = purchase;
+            }
+        }
+        return priciestPurchase;
+    }
+    else{
+        return `'${params.totalOrSingle}' is not valid, put total or priciest`
+    }
 });
