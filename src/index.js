@@ -3,11 +3,10 @@ import { stringify } from "querystring";
 import { PollingWatchKind, textChangeRangeIsUnchanged } from "typescript";
 import { Elysia } from "elysia";
 
-//import mongoose,{ Mongoose} from "mongoose";
+import mongoose,{ Mongoose} from "mongoose";
 
-const uri =
-  "mongodb+srv://0n10n7:<password>@cluster0.bumepuf.mongodb.net/?retryWrites=true&w=majority";
-//Mongoose.connect(uri);
+const uri ="mongodb+srv://0n10n7:<password>@cluster0.bumepuf.mongodb.net/?retryWrites=true&w=majority";
+mongoose.connect(uri);
 
 const server = new Elysia();
 server.listen(8080);
