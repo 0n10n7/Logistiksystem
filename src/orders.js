@@ -2,7 +2,7 @@ import mongoose,{ Mongoose} from "mongoose";
 
 const orderSchema = new mongoose.Schema({
     orders: [{
-        productType: { // Change
+        productType: {
             name: String,
             weight: Number,
             price: Number,
@@ -11,7 +11,7 @@ const orderSchema = new mongoose.Schema({
             warehouseIndex: [Number],
             inStock: Number
         },
-        worker: String, // Change
+        worker: mongoose.SchemaType.ObjectId,
         status: String,
         orderDate: Date
     }],

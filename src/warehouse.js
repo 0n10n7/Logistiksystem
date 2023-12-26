@@ -2,6 +2,6 @@ import mongoose,{ Mongoose} from "mongoose";
 
 const warehouseSchema = new mongoose.Schema({
     locationName: String,
-    productsInStock: [],
-    workers: [],
+    productsInStock: [mongoose.SchemaType.ObjectId],
+    workers: [mongoose.SchemaType.ObjectId],
 });

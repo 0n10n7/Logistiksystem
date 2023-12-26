@@ -2,7 +2,7 @@ import mongoose,{ Mongoose} from "mongoose";
 
 const workerSchema = new mongoose.Schema({
     jobTitle: String,
-    orderList: [], //Change
+    orderList: [mongoose.SchemaType.ObjectId],
     schedule: [{
         shiftStart: Date,
         shiftEnd: Date,
