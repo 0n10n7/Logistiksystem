@@ -399,9 +399,8 @@ console.log("All is good");
 
 //Endpoints
 
-server.get("/Working/:warehouseIndex/:day", async ({ params }) => {
+server.get("/Working/:warehouseIndex/:day/:jobtitle", async ({ params }) => {
   let warehouseDB = await WarehouseDB.findOne({locationName: `Location ${params.warehouseIndex}`});
-  //console.log(warehouseDB);
   CreateWarehouse(`Location ${params.warehouseIndex}`);
   let warehouse = warehouses[warehouses.length-1];
   for (let i = 0; i < warehouseDB.workers.length; i++) {
@@ -413,7 +412,6 @@ server.get("/Working/:warehouseIndex/:day", async ({ params }) => {
     worker.jobTitle = workerDB.jobTitle;
     warehouse.workers.push(worker);
   }
-  console.log(warehouse);
   let workersWorkingDay = [];
   const days = [
     "sunday",
@@ -426,52 +424,65 @@ server.get("/Working/:warehouseIndex/:day", async ({ params }) => {
   ];
 
   if (!days.includes(params.day)) {
+    warehouses.pop();
     return `'${params.day}' is not a valid day`;
+  }
+  if (!Object.values(JobTitle).includes(params.jobtitle)) {
+    warehouses.pop();
+    return `'${params.jobtitle}' is not a valid job title`;
   }
 
   for (let i = 0; i < warehouse.workers.length; i++) {
     let worker = warehouse.workers[i];
-    for (let j = 0; j < worker.schedule.length; j++) {
-      try {
-        if (
-          days[worker.schedule[j].shiftStart.getDay()] == params.day ||
-          days[worker.schedule[j].shiftEnd.getDay()] == params.day
-        ) {
-          workersWorkingDay.push(worker);
-          break;
+    if(worker.jobTitle == params.jobtitle){
+      for (let j = 0; j < worker.schedule.length; j++) {
+        try {
+          if (
+            days[worker.schedule[j].shiftStart.getDay()] == params.day ||
+            days[worker.schedule[j].shiftEnd.getDay()] == params.day
+          ) {
+            workersWorkingDay.push(worker);
+            break;
+          }
+        } catch (error) {
+          //Janky solution to a problem in the data generation
+          console.log("this one is one of the incorectly generated ones");
         }
-      } catch (error) {
-        //Janky solution to a problem in the data generation
-        console.log("this one is one of the incorectly generated ones");
       }
     }
   }
   if (workersWorkingDay.length === 0) {
+    warehouses.pop();
     return `No employees working on ${params.day}s`;
   }
-
+  warehouses.pop();
   return workersWorkingDay;
 });
-//Wokrers working att a given warehouse
+//Workers working att a given warehouse
 server.get("Working/:warehouseIndex", async ({ params }) => {
+  let warehouseDB = await WarehouseDB.findOne({locationName: `Location ${params.warehouseIndex}`});
+  CreateWarehouse(`Location ${params.warehouseIndex}`);
+  let warehouse = warehouses[warehouses.length-1];
+  for (let i = 0; i < warehouseDB.workers.length; i++) {
+    const workerID = warehouseDB.workers[i];
+    let workerDB = await WorkerDB.findById(workerID);
+    let worker = new Worker();
+    worker.name = workerDB.name;
+    worker.schedule = workerDB.schedule;
+    worker.jobTitle = workerDB.jobTitle;
+    warehouse.workers.push(worker);
+  }
   console.log("Working in ", params.warehouseIndex, "called");
-  return warehouses[params.warehouseIndex].workers;
-});
-//Working currently at a given warehouse
-server.get("/Working/now/:warehouseIndex", async ({ params }) => {
-  console.log("Working now in ", params.warehouseIndex, "called");
-  return Working(Date.now(), params.warehouseIndex);
-});
-server.get("/Productsinstock/All", async () => {
-  console.log("prodcuts in stock called");
-  return ProductsInStock();
+  warehouses.pop();
+  return warehouse.workers;
 });
 server.get("/Productsinstock/:productName", async ({ params }) => {
-  for (let i = 0; i < products.length; i++) {
-    let product = products[i];
-    if (product.name == params.productName) {
-      return product;
-    }
+  if(params.productName == "all"){
+    return await ProductDB.find().where('inStock').gt(0);
+  }
+  let result = await ProductDB.find({name: params.productName}).where('inStock').gt(0);
+  if(result[0]){
+    return result;
   }
   return "Product doesnt exsist";
 });
