@@ -2,26 +2,31 @@ import { read } from "fs";
 import { stringify } from "querystring";
 import { PollingWatchKind, textChangeRangeIsUnchanged } from "typescript";
 import { Elysia } from "elysia";
+import { OrderDB } from "/Users/kokeritz.mikael/Logistiksystem/src/orders.js";
+import { WorkerDB } from "/Users/kokeritz.mikael/Logistiksystem/src/workers.js";
+import { WarehouseDB } from "/Users/kokeritz.mikael/Logistiksystem/src/warehouse.js";
+import { ProductDB } from "/Users/kokeritz.mikael/Logistiksystem/src/products.js";
+
 
 import mongoose,{ Mongoose} from "mongoose";
 
-const uri ="mongodb+srv://0n10n7:<password>@cluster0.bumepuf.mongodb.net/?retryWrites=true&w=majority";
+const uri ="mongodb+srv://0n10n7:8JpfcZWlBUFiGWq1@cluster0.bumepuf.mongodb.net/?retryWrites=true&w=majority";
 mongoose.connect(uri);
 
 const server = new Elysia();
 server.listen(8080);
 
 const OrderStates = Object.freeze({
-  Ordered: Symbol("Ordered"),
-  Asigned: Symbol("Asigned"),
-  PickedUp: Symbol("PickedUp"),
-  Delivering: Symbol("Delivering"),
-  Delivered: Symbol("Delivered"),
+  Ordered: "Ordered",
+  Asigned: "Asigned",
+  PickedUp: "PickedUp",
+  Delivering: "Delivering",
+  Delivered: "Delivered",
 });
 const JobTitle = Object.freeze({
-  Picker: Symbol("picker"),
-  Driver: Symbol("driver"),
-  Mix: Symbol("mix"),
+  Picker: "picker",
+  Driver: "driver",
+  Mix: "mix",
 });
 class Order {
   //productType should be Product
@@ -44,11 +49,8 @@ class Order {
       if (worker.jobTitle != JobTitle.Driver) {
         if (worker.orderList.length != 0) {
           let lastOrder = worker.orderList[worker.orderList.length - 1];
-
-          tempDistance =
-            abs(this.productType.shelfX - lastOrder.productType.shelfX) +
-            abs(this.productType.shelfY - lastOrder.productType.shelfY);
-          if (tempDistance < manhatanDistance || manhatanDistance === -9) {
+          let tempDistance = Math.abs(this.productType.shelfX - lastOrder.productType.shelfX) + Math.abs(this.productType.shelfY - lastOrder.productType.shelfY);
+          if (tempDistance < manhatanDistance || manhatanDistance == -9) {
             manhatanDistance = tempDistance;
             this.worker = worker;
           }
@@ -58,6 +60,10 @@ class Order {
         }
       }
     }
+    if(!this.worker){
+      this.worker="N/A";
+    }
+    this.worker.orderList.push(this);
   }
   FindDriver() {
     this.status = OrderStates.Delivering;
@@ -76,6 +82,7 @@ class Order {
         }
       }
     }
+    this.worker.orderList.push(this);
   }
 }
 class Purchase {
@@ -126,7 +133,9 @@ const namntab12File = Bun.file("src/be0001namntab12-2022.csv");
 let input = await file.text();
 let boardgames = [];
 let boardgamesRaw = input.split("\n");
-for (let i = 0; i < boardgamesRaw.length; i++) {
+
+//for (let i = 0; i < boardgamesRaw.length; i++) {
+for (let i = 0; i < 500; i++) {
   let rowArray = boardgamesRaw[i].split(",");
   let boardgame = {
     id: rowArray[0],
@@ -147,8 +156,9 @@ for (let i = 0; i < boardgamesRaw.length; i++) {
   };
   boardgames.push(boardgame);
 }
-function GeneratePurchase() {
+async function GeneratePurchase() {
   let generatedPurchase = new Purchase();
+  let orderDB = new OrderDB();
   let randomYear = Math.round(Math.random() * 2 + 2021);
   let randomMonth = Math.round(Math.random() * 12);
   let randomDate = Math.round(Math.random() * 30 + 1); //Overflow is fine it just carries over to the next month
@@ -179,6 +189,28 @@ function GeneratePurchase() {
       generatedOrder.worker = "N/A";
       generatedOrder.status = OrderStates.Delivered;
     }
+    if(generatedOrder.worker != "N/A"){
+      orderDB.orders.push({
+        productType: await ProductDB.findOne({name: generatedOrder.productType.name}),
+        worker: await WorkerDB.findOne({name: generatedOrder.worker.name}),
+        status: generatedOrder.status,
+        orderDate: generatedOrder.orderDate
+      });
+      let orderWorker = await WorkerDB.findById(orderDB.orders[orderDB.orders.length-1].worker);
+      orderWorker.orderList.push(orderDB.orders[orderDB.orders.length-1].id);
+      orderWorker.isNew = false;
+      orderWorker.save();
+    }
+    else{
+      orderDB.orders.push({
+        productType: await ProductDB.findOne({name: generatedOrder.productType.name}),
+        worker: null,
+        status: generatedOrder.status,
+        orderDate: generatedOrder.orderDate
+      });
+    }
+    
+    
     generatedPurchase.AddOrder(generatedOrder);
   }
   //this will create some orders that where placed in the future (Untill after 31st of december 2023)
@@ -201,6 +233,13 @@ function GeneratePurchase() {
       randomMinuteAndSecond
     );
   }
+  
+  orderDB.orderDate = generatedPurchase.orderDate;
+  orderDB.price = generatedPurchase.price;
+  if(typeof(generatedPurchase.completionDate) == Date){
+    orderDB.completionDate = generatedPurchase.completionDate;
+  }
+  await orderDB.save();
   purchases.push(generatedPurchase);
 }
 let purchases = [];
@@ -220,12 +259,19 @@ let namntab11 = input.split("\n");
 input = await namntab12File.text();
 let namntab12 = input.split("\n");
 
-function GenerateData() {
+async function GenerateData() {
+  //Drops the previous data
+  await WorkerDB.collection.drop();
+  await OrderDB.collection.drop();
+  await ProductDB.collection.drop();
+  await WarehouseDB.collection.drop();
+
   let shelfYCounter = 0;
   let warehouseIndexCounter = 0;
   let workerAmount = 60;
   let workerSplit = 2; // 1/workersplit = fraction of working pop that is named after the female names list
   CreateWarehouse(`Location ${warehouseIndexCounter}`);
+  let warehouseDB = new WarehouseDB({locationName: `Location ${warehouseIndexCounter}`});
   for (let i = 0; i < boardgames.length; i++) {
     if (i % 60 === 0) {
       shelfYCounter++;
@@ -233,6 +279,8 @@ function GenerateData() {
     if (shelfYCounter % 120 === 0 && i % 60 === 0) {
       warehouseIndexCounter++;
       CreateWarehouse(`Location ${warehouseIndexCounter}`);
+      await warehouseDB.save();
+      warehouseDB = new WarehouseDB({locationName: `Location ${warehouseIndexCounter}`});
     }
     let product = new Product(
       boardgames[i].name,
@@ -243,10 +291,14 @@ function GenerateData() {
       warehouseIndexCounter,
       Math.floor(Math.random() * 50 + 12)
     );
+    const productDB = new ProductDB(product);
+    await productDB.save();
     warehouses[warehouseIndexCounter].productsInStock.push(product);
+    warehouseDB.productsInStock.push(productDB.id);
     products.push(product);
   }
-  workerAmount *= warehouseIndexCounter;
+  await warehouseDB.save();
+  workerAmount *= warehouseIndexCounter + 1;
   for (let i = 0; i < workerAmount; i++) {
     let readName = "";
     if (i % workerSplit === 0) {
@@ -267,7 +319,7 @@ function GenerateData() {
     let randomTime = Math.floor(Math.random() * 86400000 * 7);
     for (let j = 1; j <= 7; j++) {
       let shiftLength = Math.floor(
-        (Math.random() * 86400000) / Math.floor(Math.random() * 6) + 6
+        (Math.random() * 86400000) / Math.ceil(Math.random() * 6) + 6
       );
       worker.CreateSchedule(
         true,
@@ -275,13 +327,23 @@ function GenerateData() {
         new Date(Date.now() + randomTime * j + shiftLength)
       );
     }
-    warehouses[(i % warehouseIndexCounter) + 1].workers.push(worker);
+    //FIX
+    let workerDB = new WorkerDB();
+    workerDB.name = worker.name;
+    workerDB.schedule = worker.schedule;
+    workerDB.jobTitle = worker.jobTitle;
+    await workerDB.save();
+    warehouses[(i % (warehouseIndexCounter + 1))].workers.push(worker);
+    warehouseDB = await WarehouseDB.findOne({locationName: `Location ${i % (warehouseIndexCounter + 1)}`});
+    warehouseDB.workers.push(workerDB.id);
+    warehouseDB.isNew = false;
+    await warehouseDB.save();
   }
-  for (let i = 0; i < 2000; i++) {
-    GeneratePurchase();
+  for (let i = 0; i < 500; i++) {
+    await GeneratePurchase();
   }
-  Bun.write("src/data.json", JSON.stringify(warehouses));
-  Bun.write("src/orders.json", JSON.stringify(purchases));
+  // Bun.write("src/data.json", JSON.stringify(warehouses));
+  // Bun.write("src/orders.json", JSON.stringify(purchases));  
   console.log("Generated Data");
 }
 
@@ -326,12 +388,18 @@ function CompletedPurchases() {
   }
   return completedPurchases;
 }
-GenerateData();
+await GenerateData();
+// const data = Bun.file("src/data.json");
+// const orders = Bun.file("src/orders.json");
+// input = await data.text();
+// warehouses = JSON.parse(input);
+// input = await orders.text();
+// purchases = JSON.parse(input);
+console.log("All is good");
 
 //Endpoints
 
 server.get("/Working/:warehouseIndex/:day", async ({ params }) => {
-  console.log("Working today");
   let arr = warehouses[params.warehouseIndex].workers;
   let workersWorkingDay = [];
   const days = [
@@ -348,7 +416,6 @@ server.get("/Working/:warehouseIndex/:day", async ({ params }) => {
     return `'${params.day}' is not a valid day`;
   }
 
-  //arr = arr.filter(e => e.schedule[days.indexOf(params.day)]);
   for (let i = 0; i < arr.length; i++) {
     let worker = arr[i];
     for (let j = 0; j < worker.schedule.length; j++) {

@@ -1,17 +1,9 @@
-import mongoose,{ Mongoose} from "mongoose";
+import * as mongoose from 'mongoose';
 
 const orderSchema = new mongoose.Schema({
     orders: [{
-        productType: {
-            name: String,
-            weight: Number,
-            price: Number,
-            shelfX: Number,
-            shelfY: Number,
-            warehouseIndex: [Number],
-            inStock: Number
-        },
-        worker: mongoose.SchemaType.ObjectId,
+        productType: mongoose.SchemaTypes.ObjectId,
+        worker: mongoose.SchemaTypes.ObjectId,
         status: String,
         orderDate: Date
     }],
@@ -19,3 +11,6 @@ const orderSchema = new mongoose.Schema({
     price: Number,
     completionDate: Date
 });
+
+
+export const OrderDB  = mongoose.model("Order", orderSchema);

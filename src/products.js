@@ -1,6 +1,6 @@
 import mongoose, { Mongoose } from "mongoose";
 
-const warehouseSchema = new mongoose.Schema({
+const productSchema = new mongoose.Schema({
   name: String,
   weight: Number,
   price: Number,
@@ -9,3 +9,7 @@ const warehouseSchema = new mongoose.Schema({
   warehouseIndex: [Number],
   inStock: Number,
 });
+
+export const ProductDB = mongoose.model("Product", productSchema);
+
+

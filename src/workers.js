@@ -2,7 +2,7 @@ import mongoose,{ Mongoose} from "mongoose";
 
 const workerSchema = new mongoose.Schema({
     jobTitle: String,
-    orderList: [mongoose.SchemaType.ObjectId],
+    orderList: [mongoose.SchemaTypes.ObjectId],
     schedule: [{
         shiftStart: Date,
         shiftEnd: Date,
@@ -10,3 +10,5 @@ const workerSchema = new mongoose.Schema({
     }],
     name: String
 });
+
+export const WorkerDB  = mongoose.model("Worker", workerSchema);
