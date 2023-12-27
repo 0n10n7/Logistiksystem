@@ -18,7 +18,7 @@ server.listen(8080);
 
 const OrderStates = Object.freeze({
   Ordered: "Ordered",
-  Asigned: "Asigned",
+  Assigned: "Assigned",
   PickedUp: "PickedUp",
   Delivering: "Delivering",
   Delivered: "Delivered",
@@ -39,7 +39,7 @@ class Order {
     this.orderDate = orderDate;
   }
   FindPicker() {
-    this.status = OrderStates.Asigned;
+    this.status = OrderStates.Assigned;
     this.productType.shelfX;
     this.productType.warehouseIndex;
     let manhatanDistance = -9;
@@ -236,7 +236,7 @@ async function GeneratePurchase() {
   
   orderDB.orderDate = generatedPurchase.orderDate;
   orderDB.price = generatedPurchase.price;
-  if(typeof(generatedPurchase.completionDate) == Date){
+  if(typeof(generatedPurchase.completionDate) != undefined){
     orderDB.completionDate = generatedPurchase.completionDate;
   }
   await orderDB.save();
@@ -378,16 +378,6 @@ function ProductsInStock() {
   }
   return productsInStockCurrently;
 }
-function CompletedPurchases() {
-  let completedPurchases = [];
-  for (let i = 0; i < purchases.length; i++) {
-    let purchase = purchases[i];
-    if (typeof purchase.completionDate != undefined) {
-      completedPurchases.push(purchase);
-    }
-  }
-  return completedPurchases;
-}
 //await GenerateData();
 // const data = Bun.file("src/data.json");
 // const orders = Bun.file("src/orders.json");
@@ -398,7 +388,10 @@ function CompletedPurchases() {
 console.log("All is good");
 
 //Endpoints
-
+server.get("Generate/:?",async() => {
+  await GenerateData();
+  return "All is good";
+})
 server.get("/Working/:warehouseIndex/:day/:jobtitle", async ({ params }) => {
   let warehouseDB = await WarehouseDB.findOne({locationName: `Location ${params.warehouseIndex}`});
   CreateWarehouse(`Location ${params.warehouseIndex}`);
@@ -496,7 +489,7 @@ server.get("/Orderstobe/picked/:?", async ({ params }) => {
     const purchase = purchases[i];
     for (let j = 0; j < purchase.orders.length; j++) {
       const order = purchase.orders[j];
-      if (order.status == OrderStates.Asigned) {
+      if (order.status == OrderStates.Assigned) {
         toBePicked.push(order);
       }
     }
@@ -547,13 +540,13 @@ server.get("/orders/:month/:totalOrSingle", async ({ params }) => {
   if (!months.includes(params.month)) {
     return `'${params.month}' is not a valid month`;
   }
-  let completedPurchases = CompletedPurchases();
+  let completedPurchases = await OrderDB.find({'completionDate' : {$exists: true}});
   console.log(completedPurchases);
   if (params.totalOrSingle == "total") {
     let totalPrice = 0;
     for (let i = 0; i < completedPurchases.length; i++) {
       let purchase = completedPurchases[i];
-      if (months[purchase.completionDate[j].getMonth()] == params.month) {
+      if (months[purchase.completionDate.getMonth()] == params.month) {
         console.log(purchase.price);
         totalPrice += purchase.price;
       }
@@ -564,7 +557,7 @@ server.get("/orders/:month/:totalOrSingle", async ({ params }) => {
     let priciestPurchase;
     for (let i = 0; i < completedPurchases.length; i++) {
       let purchase = completedPurchases[i];
-      if (purchase.price > priciest && months[purchase.completionDate[j].getMonth()] == params.month) {
+      if (purchase.price > priciest && months[purchase.completionDate.getMonth()] == params.month) {
         priciest = purchase.price;
         priciestPurchase = purchase;
       }
