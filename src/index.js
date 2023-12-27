@@ -491,11 +491,12 @@ server.get("/pickers/without/:param", async ({ params }) => {
 });
 server.get("/Orderstobe/picked/:?", async ({ params }) => {
   let toBePicked = [];
+  purchases = await OrderDB.find();
   for (let i = 0; i < purchases.length; i++) {
     const purchase = purchases[i];
     for (let j = 0; j < purchase.orders.length; j++) {
       const order = purchase.orders[j];
-      if (order.status === OrderStates.Asigned) {
+      if (order.status == OrderStates.Asigned) {
         toBePicked.push(order);
       }
     }
@@ -503,6 +504,7 @@ server.get("/Orderstobe/picked/:?", async ({ params }) => {
   return toBePicked;
 });
 server.get("/Orderstobe/driven/:oldestOrAll", async ({ params }) => {
+  purchases = await OrderDB.find();
   let toBeDriven = [];
   let oldest;
   let oldestOrder = -7;
