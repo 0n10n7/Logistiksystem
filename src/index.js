@@ -487,17 +487,7 @@ server.get("/Productsinstock/:productName", async ({ params }) => {
   return "Product doesnt exsist";
 });
 server.get("/pickers/without/:param", async ({ params }) => {
-  let withoutOrder = [];
-  for (let i = 0; i < warehouses.length; i++) {
-    const warehouse = warehouses[i];
-    for (let j = 0; j < warehouse.workers.length; j++) {
-      const worker = warehouse.workers[j];
-      if (worker.orderList.length == 0 && worker.jobTitle === JobTitle.Picker) {
-        withoutOrder.push(worker);
-      }
-    }
-  }
-  return withoutOrder;
+  return await WorkerDB.find({'orderList.0' : {$exists : false}}).where('jobTitle').equals(JobTitle.Picker);
 });
 server.get("/Orderstobe/picked/:?", async ({ params }) => {
   let toBePicked = [];
