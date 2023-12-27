@@ -388,7 +388,7 @@ function CompletedPurchases() {
   }
   return completedPurchases;
 }
-await GenerateData();
+//await GenerateData();
 // const data = Bun.file("src/data.json");
 // const orders = Bun.file("src/orders.json");
 // input = await data.text();
@@ -400,7 +400,20 @@ console.log("All is good");
 //Endpoints
 
 server.get("/Working/:warehouseIndex/:day", async ({ params }) => {
-  let arr = warehouses[params.warehouseIndex].workers;
+  let warehouseDB = await WarehouseDB.findOne({locationName: `Location ${params.warehouseIndex}`});
+  //console.log(warehouseDB);
+  CreateWarehouse(`Location ${params.warehouseIndex}`);
+  let warehouse = warehouses[warehouses.length-1];
+  for (let i = 0; i < warehouseDB.workers.length; i++) {
+    const workerID = warehouseDB.workers[i];
+    let workerDB = await WorkerDB.findById(workerID);
+    let worker = new Worker();
+    worker.name = workerDB.name;
+    worker.schedule = workerDB.schedule;
+    worker.jobTitle = workerDB.jobTitle;
+    warehouse.workers.push(worker);
+  }
+  console.log(warehouse);
   let workersWorkingDay = [];
   const days = [
     "sunday",
@@ -416,8 +429,8 @@ server.get("/Working/:warehouseIndex/:day", async ({ params }) => {
     return `'${params.day}' is not a valid day`;
   }
 
-  for (let i = 0; i < arr.length; i++) {
-    let worker = arr[i];
+  for (let i = 0; i < warehouse.workers.length; i++) {
+    let worker = warehouse.workers[i];
     for (let j = 0; j < worker.schedule.length; j++) {
       try {
         if (
